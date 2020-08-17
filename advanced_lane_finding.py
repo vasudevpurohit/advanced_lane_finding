@@ -29,7 +29,7 @@ for fname in img:
 ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(o_array,i_array,(y_size,x_size),None,None)
 
 #undistorting a real world image
-test = plt.imread('test_images/test2.jpg')
+test = plt.imread('test_images/test6.jpg')
 test_udst = cv2.undistort(test,cameraMatrix,distCoeffs,None,cameraMatrix) #undistorting the pulled test image
 
 #thresholding 'test' image based on color and gradient
@@ -86,9 +86,14 @@ window_no = 10
 window_height = np.int(y_size/window_no)
 minpix = 50
 pixels_captured = []
-trans_im_copy = np.zeros((y_size,x_size),dtype='uint8')
-trans_3c = np.dstack((trans_im_copy,trans_im_copy,trans_im_copy))*255
-
+trans_im_copy_left = np.zeros((y_size,x_size),dtype='uint8')
+trans_im_copy_right = np.zeros((y_size,x_size),dtype='uint8')
+trans_3c = np.dstack((trans_im_copy_left,trans_im_copy_left,trans_im_copy_left))*255 #could have used the _right one as well
+indices_l = []
+indices_r = []
+co_l = np.array([],dtype='float32')     #empty array to store all the x,y co-ordinates of the left lane
+co_r = np.array([],dtype='float32')     #empty array to store all the x,y co-ordinates of the right lane
+count = 0
 #left lane
 upper_bound = y_size
 for i in range(window_no):
@@ -100,14 +105,16 @@ for i in range(window_no):
         for k in range(lower_bound,upper_bound):
             if trans_im[k][j] == 1:
                 indices.append([k,j])
-                trans_im_copy[k][j] = 1
-    start_point = (boundx_1,upper_bound)
-    end_point = (boundx_2,lower_bound)
-    cv2.rectangle(trans_3c,start_point,end_point,(255,0,0),3)
-    indices = np.array(indices,dtype='float32')
+                trans_im_copy_left[k][j] = 1
+    start_point = (boundx_1,upper_bound)    #defining the start point of the search window
+    end_point = (boundx_2,lower_bound)      #defining the end point of the search window
+    cv2.rectangle(trans_3c,start_point,end_point,(255,0,0),3)   #constructing a red rectangle over the image
+    indices = np.array(indices,dtype='float32')     #converting the index list to an array
+    co_l = np.append(co_l,indices)                  #storing these in a master array for co-ordinates, used later
     if indices.shape[0] >= minpix:
-        left_current = np.mean(indices,axis=0)[1]
+        left_current = np.mean(indices,axis=0)[1]   #changing the mid-point of the next rectangle based on the current search
     upper_bound = lower_bound   #for the next iteration
+co_l = np.reshape(co_l,(np.int(co_l.shape[0]/2),2)) #reshaping the co-ordinate array for (x,y) format
 
 #right lane
 upper_bound = y_size
@@ -120,14 +127,39 @@ for i in range(window_no):
         for k in range(lower_bound,upper_bound):
             if trans_im[k][j] == 1:
                 indices.append([k,j])
-                trans_im_copy[k][j] = 1
+                trans_im_copy_right[k][j] = 1
     start_point = (boundx_1,upper_bound)
     end_point = (boundx_2,lower_bound)
     cv2.rectangle(trans_3c,start_point,end_point,(255,0,0),3)
     indices = np.array(indices,dtype='float32')
+    co_r = np.append(co_r,indices)
     if indices.shape[0] >= minpix:
         right_current = np.mean(indices,axis=0)[1]
     upper_bound = lower_bound   #for the next iteration
+co_r = np.reshape(co_r,(np.int(co_r.shape[0]/2),2)) #reshaping the co-ordinate array for (x,y) format
+
+
+trans_im_copy = cv2.bitwise_or(trans_im_copy_left,trans_im_copy_right)
 trans_im_copy = np.dstack((trans_im_copy,trans_im_copy,trans_im_copy))*255
 final = cv2.bitwise_or(trans_im_copy,trans_3c)
-plt.imshow(final)
+
+#fitting a polynomial over the left and right lanes separately
+
+x_l = co_l[:,0] #x coordinates of the left lane
+y_l = co_l[:,1] #y coordinates of the right lane
+x_r = co_r[:,0] #x coordinates of the left lane
+y_r = co_r[:,1] #y coordinates of the right lane
+
+poly_l = np.polyfit(x_l,y_l,2)
+poly_r = np.polyfit(x_r,y_r,2)
+
+y_gen_l = np.polyval(poly_l,x_l)
+y_gen_r = np.polyval(poly_r,x_r)
+
+plt.scatter(x_l,y_l,marker='.',color='red')
+plt.scatter(x_r,y_r,marker='.',color='blue')
+plt.plot(x_l,y_gen_l,color='green')
+plt.plot(x_r,y_gen_r,color='green')
+plt.show() 
+
+
