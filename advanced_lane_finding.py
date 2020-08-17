@@ -29,7 +29,7 @@ for fname in img:
 ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(o_array,i_array,(y_size,x_size),None,None)
 
 #undistorting a real world image
-test = plt.imread('test_images/test1.jpg')
+test = plt.imread('test_images/test2.jpg')
 test_udst = cv2.undistort(test,cameraMatrix,distCoeffs,None,cameraMatrix) #undistorting the pulled test image
 
 #thresholding 'test' image based on color and gradient
@@ -86,8 +86,8 @@ window_no = 10
 window_height = np.int(y_size/window_no)
 minpix = 50
 pixels_captured = []
-trans_im_copy = trans_im*0
-trans_3c = np.dstack((trans_im,trans_im,trans_im))*255
+trans_im_copy = np.zeros((y_size,x_size),dtype='uint8')
+trans_3c = np.dstack((trans_im_copy,trans_im_copy,trans_im_copy))*255
 
 #left lane
 upper_bound = y_size
@@ -109,4 +109,25 @@ for i in range(window_no):
         left_current = np.mean(indices,axis=0)[1]
     upper_bound = lower_bound   #for the next iteration
 
-plt.imshow(trans_3c,cmap='gray')
+#right lane
+upper_bound = y_size
+for i in range(window_no):
+    indices = []
+    boundx_1 = np.int(right_current - window_margin) #left bound for left lane
+    boundx_2 = np.int(right_current + window_margin) #right bound for left lane
+    lower_bound = upper_bound - window_height   #for the current iteration
+    for j in range(boundx_1,boundx_2):
+        for k in range(lower_bound,upper_bound):
+            if trans_im[k][j] == 1:
+                indices.append([k,j])
+                trans_im_copy[k][j] = 1
+    start_point = (boundx_1,upper_bound)
+    end_point = (boundx_2,lower_bound)
+    cv2.rectangle(trans_3c,start_point,end_point,(255,0,0),3)
+    indices = np.array(indices,dtype='float32')
+    if indices.shape[0] >= minpix:
+        right_current = np.mean(indices,axis=0)[1]
+    upper_bound = lower_bound   #for the next iteration
+trans_im_copy = np.dstack((trans_im_copy,trans_im_copy,trans_im_copy))*255
+final = cv2.bitwise_or(trans_im_copy,trans_3c)
+plt.imshow(final)
