@@ -29,7 +29,7 @@ for fname in img:
 ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(o_array,i_array,(y_size,x_size),None,None)
 
 #undistorting a real world image
-test = plt.imread('test_images/test6.jpg')
+test = plt.imread('test_images/test3.jpg')
 test_udst = cv2.undistort(test,cameraMatrix,distCoeffs,None,cameraMatrix) #undistorting the pulled test image
 
 #thresholding 'test' image based on color and gradient
@@ -40,8 +40,8 @@ grad_x = cv2.Sobel(test_g,cv2.CV_64F,1,0,k_size)    #gradient computation
 abs_gradx = np.abs(grad_x)  #absolute gradient values
 scaled_absx = np.uint8(255*(abs_gradx/np.max(abs_gradx)))   #scaled gradients that lie between 0 & 255
 
-min_g = 20  #minimum gradient threshold
-max_g = 105 #maximum gradient threshold
+min_g = 30  #minimum gradient threshold
+max_g = 100 #maximum gradient threshold
 
 bin_g = np.zeros((y_size,x_size),dtype='uint8') #empty array to store values for 'activated' pixels
 bin_g[(scaled_absx >= min_g)&(scaled_absx <= max_g)] = 1
@@ -50,7 +50,7 @@ bin_g[(scaled_absx >= min_g)&(scaled_absx <= max_g)] = 1
 test_c = cv2.cvtColor(test_udst,cv2.COLOR_BGR2HLS)
 S = test_c[:,:,2]   #extracting the saturation channel
 
-min_s = 140  #minimum saturation threshold
+min_s = 170  #minimum saturation threshold
 max_s = 255 #maximum saturation threshold
 bin_s = np.zeros((y_size,x_size),dtype='uint8')
 bin_s[(S > min_s) & (S <= max_s)] = 1
@@ -59,13 +59,13 @@ bin_comb = np.zeros((y_size,x_size),dtype='uint8')  #initialising the combined a
 bin_comb[(bin_g == 1)|(bin_s == 1)] = 1
 
 #perspective transformation
-vertices = np.array([[(200,670),(1100,670),(750,450),(550,450)]])
+vertices = np.array([[(150,720),(590,450),(700,450),(1250,720)]])
 mask = np.zeros((y_size,x_size),dtype='float32')
 mask = cv2.fillPoly(mask,vertices,255)
 mask = np.uint8(mask)
 final_im = cv2.bitwise_and(bin_comb,mask)
 
-warped = np.array([[[150,700]],[[950,700]],[[1050,50]],[[50,50]]],np.float32)
+warped = np.array([[[200,720]],[[200,0]],[[980,0]],[[980,720]]],np.float32)
 vertices = np.reshape(vertices,(4,1,2))
 vertices = np.float32(vertices)
 M_persp = cv2.getPerspectiveTransform(vertices,warped)  #transform matrix to carry out the perspective transformation
@@ -145,21 +145,28 @@ final = cv2.bitwise_or(trans_im_copy,trans_3c)
 
 #fitting a polynomial over the left and right lanes separately
 
-x_l = co_l[:,0] #x coordinates of the left lane
-y_l = co_l[:,1] #y coordinates of the right lane
-x_r = co_r[:,0] #x coordinates of the left lane
-y_r = co_r[:,1] #y coordinates of the right lane
+x_l = co_l[:,1] #x coordinates of the left lane
+y_l = co_l[:,0] #y coordinates of the right lane
+x_r = co_r[:,1] #x coordinates of the left lane
+y_r = co_r[:,0] #y coordinates of the right lane
 
 poly_l = np.polyfit(x_l,y_l,2)
 poly_r = np.polyfit(x_r,y_r,2)
+x_lnew = np.linspace(200,400,500)
+x_rnew = np.linspace(800,1000,500)
+y_gen_l = np.polyval(poly_l,x_lnew)
+y_gen_r = np.polyval(poly_r,x_rnew)
+R_l = (np.power((1+np.power((2*poly_l[0]*y_gen_l+poly_l[1]),2)),1.5))/(2*poly_l[0]) #radius of curvature of the left lane
+R_r = (np.power((1+np.power((2*poly_r[0]*y_gen_r+poly_r[1]),2)),1.5))/(2*poly_r[0]) #radius of curvature of the right lane
 
-y_gen_l = np.polyval(poly_l,x_l)
-y_gen_r = np.polyval(poly_r,x_r)
+plt.plot(x_l,y_l,'o',markersize=3,color='red')
+plt.plot(x_r,y_r,'o',markersize=3,color='blue')
+plt.plot(x_lnew,y_gen_l,'-',color='green')
+plt.plot(x_rnew,y_gen_r,'-',color='green')
+plt.show()
 
-plt.scatter(x_l,y_l,marker='.',color='red')
-plt.scatter(x_r,y_r,marker='.',color='blue')
-plt.plot(x_l,y_gen_l,color='green')
-plt.plot(x_r,y_gen_r,color='green')
-plt.show() 
-
-
+#next step would be to modify the current program for a video and the searching would have to be changed accordingly
+#the smoothing can also be carried out over n frames and then this lane output can be added to a running video to 
+#visualise how this is working
+#see how you can add the radius and offset values to the video and create a separate video for visualising through
+# a bird's eye view
