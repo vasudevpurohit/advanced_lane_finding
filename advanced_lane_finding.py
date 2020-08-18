@@ -27,8 +27,9 @@ for fname in img:
 
 ret, cameraMatrix, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(o_array,i_array,(y_size,x_size),None,None)
 
+
 #undistorting a real world image
-test = plt.imread('test_images/test1.jpg')
+test = plt.imread('test_images/test6.jpg')
 test_udst = cv2.undistort(test,cameraMatrix,distCoeffs,None,cameraMatrix) #undistorting the pulled test image
 
 #thresholding 'test' image based on color and gradient
@@ -67,14 +68,15 @@ vertices = np.array([[(150,720),(590,450),(750,450),(1250,720)]])
 mask = np.zeros((y_size,x_size),dtype='float32')
 mask = cv2.fillPoly(mask,vertices,255)
 mask = np.uint8(mask)
-final_im = cv2.bitwise_and(bin_comb,mask)
+mask_im = cv2.bitwise_and(bin_comb,mask)
 
 warped = np.array([[[200,720]],[[200,0]],[[1000,0]],[[800,720]]],np.float32)
 vertices = np.reshape(vertices,(4,1,2))
 vertices = np.float32(vertices)
 M_persp = cv2.getPerspectiveTransform(vertices,warped)  #transform matrix to carry out the perspective transformation
+M_persp_inv = np.linalg.inv(M_persp)                    #inverse transform matrix to be used later
 trans_im = np.zeros((y_size,x_size),dtype='uint8')      #initialising an empty array to store the transformed img
-trans_im = cv2.warpPerspective(final_im,M_persp,(x_size,y_size),flags=cv2.INTER_LINEAR)
+trans_im = cv2.warpPerspective(mask_im,M_persp,(x_size,y_size),flags=cv2.INTER_LINEAR)
 
 
 #finding polynomials for lane lines
@@ -119,14 +121,16 @@ for i in range(window_no):
         left_current = np.mean(indices,axis=0)[1]   #changing the mid-point of the next rectangle based on the current search
     upper_bound = lower_bound   #for the next iteration
     
+my = 30/720 #metres per pixel in y direction
+mx = 3.7/700 #metres per pixel in x direction   
 co_l = np.reshape(co_l,(np.int(co_l.shape[0]/2),2)) #reshaping the co-ordinate array for (x,y) format
 poly_l = np.polyfit(co_l[:,0],co_l[:,1],2)
-y_new=np.linspace(0,y_size-1,y_size)
+y_new=np.linspace(0,(y_size-1),y_size)
 x_newl = np.polyval(poly_l,y_new)
 
 trans_im_copy_left = np.dstack((trans_im_copy_left,trans_im_copy_left,trans_im_copy_left))*255
 
-final_im_l = cv2.bitwise_or(trans_im_copy_left,trans_3c)
+search_im_l = cv2.bitwise_or(trans_im_copy_left,trans_3c)
 
 #right lane
 upper_bound = y_size
@@ -154,14 +158,34 @@ x_newr = np.polyval(poly_r,y_new)
 
 trans_im_copy_right = np.dstack((trans_im_copy_right,trans_im_copy_right,trans_im_copy_right))*255
 
-final_im_r = cv2.bitwise_or(trans_im_copy_right,trans_3c)
-final_im = cv2.bitwise_or(final_im_l,final_im_r)
+search_im_r = cv2.bitwise_or(trans_im_copy_right,trans_3c)
+search_im = cv2.bitwise_or(search_im_l,search_im_r)
 
-plt.imshow(final_im)
-plt.plot(x_newl,y_new,'-',color='green',markersize=0.5)
-plt.plot(x_newr,y_new,'-',color='blue',markersize=0.5)
+#visualising the results
+# plt.imshow(search_im)
+# plt.plot(x_newl,y_new,'-',color='green',markersize=0.5)
+# plt.plot(x_newr,y_new,'-',color='blue',markersize=0.5)
 
+#calculating the radius of curvature
+# A_new_l = (mx/(np.power(my,2)))*poly_l[0] #scaled coeffecients
+# A_new_r = (mx/(np.power(my,2)))*poly_r[0]
+# B_new_l = (mx/my)*poly_l[1]
+# B_new_r = (mx/my)*poly_r[1]
+R_l = (np.power(1+np.power(((2*poly_l[0]*mx/(my*my))*(np.max(y_new)*my))+(poly_l[1]*mx/my),2),1.5))/np.absolute(2*poly_l[0]*mx/(my*my))
+R_r = (np.power(1+np.power(((2*poly_r[0]*mx/(my*my))*(np.max(y_new)*my))+(poly_r[1]*mx/my),2),1.5))/np.absolute(2*poly_r[0]*mx/(my*my))
 
+#transforming the perspective image to the actual image again
+templ = np.transpose(np.array((x_newl,y_new)))
+tempr = np.transpose(np.array((x_newr,y_new)))[::-1]
+co = np.vstack((templ,tempr))   #storing all the coordinates in a single array
+final_im = np.zeros((y_size,x_size,3),dtype='uint8')
+final_im = cv2.fillPoly(final_im,np.int32([co]),(0,255,0))      #final image with the lane region colored green
+
+final_im_tr = cv2.warpPerspective(final_im,M_persp_inv,(x_size,y_size),flags=cv2.INTER_LINEAR)
+
+lane_im = cv2.addWeighted(final_im_tr,0.3,test_udst,1,0)
+
+plt.imshow(lane_im)
 
 #next step would be to modify the current program for a video and the searching would have to be changed accordingly
 #the smoothing can also be carried out over n frames and then this lane output can be added to a running video to 
