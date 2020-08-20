@@ -161,13 +161,13 @@ def finalOutput(R_l,R_r,offset_1,img):
     cv2.putText(img,left_curvature,(100,100),cv2.FONT_HERSHEY_SIMPLEX,1.2,(255,255,0),3)
     cv2.putText(img,right_curvature,(100,150),cv2.FONT_HERSHEY_SIMPLEX,1.2,(255,255,0),3)
     cv2.putText(img,offset_string,(100,200),cv2.FONT_HERSHEY_SIMPLEX,1.2,(255,255,0),3)
-    return img
+    return np.uint8(img)
 
 ##MAIN CODE
 cap = cv2.VideoCapture('project_video.mp4')
 
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-out = cv2.VideoWriter('test_videos_output/project_video_.mp4', fourcc, 25, (960,  540))
+out = cv2.VideoWriter('test_videos_output/project_video.mp4', fourcc, 25, (1280,720))
 fcount = 0
 while(cap.isOpened()):
     ret, frame = cap.read()
