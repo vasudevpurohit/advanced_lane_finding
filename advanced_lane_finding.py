@@ -83,8 +83,6 @@ def imageTransform(img):
 
 #finding the lane lines
 def laneLines(img1,M_persp_inv,img2,fcount):
-    global left_start
-    global right_start
     window_margin = 100
     window_no = 10  
     window_height = np.int(y_size/window_no)
@@ -132,18 +130,32 @@ def laneLines(img1,M_persp_inv,img2,fcount):
     rightx = nonzerox[co_r_indices]
     righty = nonzeroy[co_r_indices]
     
-    poly_l = np.polyfit(lefty,leftx,2)
-    poly_r = np.polyfit(righty,rightx,2)
-    y_new = np.linspace(0,y_size-1,y_size)
-    x_newl= np.polyval(poly_l,y_new)
-    x_newr = np.polyval(poly_r,y_new)
+    if len(xlprev) < 10:
+        poly_l = np.polyfit(lefty,leftx,2)
+        poly_r = np.polyfit(righty,rightx,2)
+        y_new = np.linspace(0,y_size-1,y_size)
+        x_newl= np.polyval(poly_l,y_new)
+        x_newr = np.polyval(poly_r,y_new)
+        xlprev.append(x_newl)
+        xrprev.append(x_newr)
+    else:
+        ##carry out the smoothing of the x values here
+        #average of x-co of the left lane for the previous 10 frames
+        #average of x-co of the right lane for the previous 10 frames
+        #poly_l calculation
+        #poly_r calculation
+        # y_new = np.linspace(0,y_size-1,y_size)
+        # x_newl= np.polyval(poly_l,y_new)
+        # x_newr = np.polyval(poly_r,y_new)
+        # xlprev.append(x_newl)
+        # xrprev.append(x_newr)
     left_lane = np.transpose(np.array((x_newl,y_new)))
     right_lane = np.transpose(np.array((x_newr,y_new)))[::-1]
     lanes_both = np.vstack((left_lane,right_lane))
     final_im = np.zeros((y_size,x_size,3),dtype='uint8')
     final_im = cv2.fillPoly(final_im,np.int32([lanes_both]),(0,255,0))
     final_im_tr = cv2.warpPerspective(final_im,M_persp_inv,(x_size,y_size),flags=cv2.INTER_LINEAR)
-    return poly_l, poly_r, cv2.addWeighted(final_im_tr,0.3,img2,1,0), y_new
+    return poly_l, poly_r, cv2.addWeighted(final_im_tr,0.3,img2,1,0), y_new, x_newl, x_newr
 
 #curvature function
 def curvatureRadius(poly,mx,my):
@@ -169,6 +181,8 @@ cap = cv2.VideoCapture('project_video.mp4')
 fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 out = cv2.VideoWriter('test_videos_output/project_video.mp4', fourcc, 25, (1280,720))
 fcount = 0
+xlprev = []
+xrprev = []
 while(cap.isOpened()):
     ret, frame = cap.read()
     
@@ -177,11 +191,13 @@ while(cap.isOpened()):
 # frame = plt.imread('test_images/test1.jpg')
     global left_start
     global right_start
+    global xlprev
+    global xrprev
     fcount+=1
     frame_udst = undstrtIm(frame,cameraMatrix,distCoeffs)
     filtered_frame = threshMasking(frame_udst)
     M_persp_inv, trans_frame = imageTransform(filtered_frame)
-    poly_l, poly_r, final_im, y_new = laneLines(trans_frame,M_persp_inv,frame_udst,fcount)
+    poly_l, poly_r, final_im, y_new, x_newl, x_newr = laneLines(trans_frame,M_persp_inv,frame_udst,fcount)
     R_l = curvatureRadius(poly_l,mx=3.7/700,my=30/720)
     R_r = curvatureRadius(poly_r,mx=3.7/700,my=30/720)
     offset1 = offset(poly_l,poly_r,x_size,mx=3.7/700)
@@ -189,6 +205,8 @@ while(cap.isOpened()):
     plt.imshow(final_im)
     left_start = np.polyval(poly_l,np.max(y_new))       #defining the starts from the next frame
     right_start = np.polyval(poly_r,np.max(y_new))
+    xlprev.append(x_newl)
+    xrprev.append(x_newr)
 
 
     out.write(final_im)
