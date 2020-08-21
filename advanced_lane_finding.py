@@ -82,7 +82,7 @@ def imageTransform(img):
     return M_persp_inv, cv2.warpPerspective(img,M_persp,(x_size,y_size),flags=cv2.INTER_LINEAR)
 
 #finding the lane lines
-def laneLines(img1,M_persp_inv,img2,fcount):
+def laneLines(img1,M_persp_inv,img2,fcount,xlprev,xrprev,left_start,right_start):
     window_margin = 100
     window_no = 10  
     window_height = np.int(y_size/window_no)
@@ -130,7 +130,7 @@ def laneLines(img1,M_persp_inv,img2,fcount):
     rightx = nonzerox[co_r_indices]
     righty = nonzeroy[co_r_indices]
     
-    if len(xlprev) < 10:
+    if (fcount < 9):
         poly_l = np.polyfit(lefty,leftx,2)
         poly_r = np.polyfit(righty,rightx,2)
         y_new = np.linspace(0,y_size-1,y_size)
@@ -139,16 +139,21 @@ def laneLines(img1,M_persp_inv,img2,fcount):
         xlprev.append(x_newl)
         xrprev.append(x_newr)
     else:
-        ##carry out the smoothing of the x values here
-        #average of x-co of the left lane for the previous 10 frames
-        #average of x-co of the right lane for the previous 10 frames
-        #poly_l calculation
-        #poly_r calculation
-        # y_new = np.linspace(0,y_size-1,y_size)
-        # x_newl= np.polyval(poly_l,y_new)
-        # x_newr = np.polyval(poly_r,y_new)
-        # xlprev.append(x_newl)
-        # xrprev.append(x_newr)
+        poly_l = np.polyfit(lefty,leftx,2)
+        poly_r = np.polyfit(righty,rightx,2)
+        y_new = np.linspace(0,y_size-1,y_size)
+        x_newl= np.polyval(poly_l,y_new)
+        x_newr = np.polyval(poly_r,y_new)
+        xlprev.append(x_newl)
+        xrprev.append(x_newr)
+        xall_l = np.array(xlprev[fcount-9:fcount])      #from previous 10 iterations
+        xmeanl = np.mean(xall_l,axis=0)                 #mean of all the xs from the previous 10 iterations
+        poly_l = np.polyfit(y_new,xmeanl,2)          #polynomial for the averaged values 
+        x_newl = np.polyval(poly_l,y_new)            #new averaged value for x
+        xall_r = np.array(xrprev[fcount-9:fcount])    #from previous 10 iterations
+        xmeanr = np.mean(xall_r,axis=0)               #mean of all the xs from the previous 10 iterations
+        poly_r = np.polyfit(y_new,xmeanr,2)
+        x_newr = np.polyval(poly_r,y_new)
     left_lane = np.transpose(np.array((x_newl,y_new)))
     right_lane = np.transpose(np.array((x_newr,y_new)))[::-1]
     lanes_both = np.vstack((left_lane,right_lane))
@@ -183,21 +188,19 @@ out = cv2.VideoWriter('test_videos_output/project_video.mp4', fourcc, 25, (1280,
 fcount = 0
 xlprev = []
 xrprev = []
+left_start = 0
+right_start = 0
 while(cap.isOpened()):
     ret, frame = cap.read()
     
     if not ret:
         break
 # frame = plt.imread('test_images/test1.jpg')
-    global left_start
-    global right_start
-    global xlprev
-    global xrprev
     fcount+=1
     frame_udst = undstrtIm(frame,cameraMatrix,distCoeffs)
     filtered_frame = threshMasking(frame_udst)
     M_persp_inv, trans_frame = imageTransform(filtered_frame)
-    poly_l, poly_r, final_im, y_new, x_newl, x_newr = laneLines(trans_frame,M_persp_inv,frame_udst,fcount)
+    poly_l, poly_r, final_im, y_new, x_newl, x_newr = laneLines(trans_frame,M_persp_inv,frame_udst,fcount,xlprev,xrprev,left_start,right_start)
     R_l = curvatureRadius(poly_l,mx=3.7/700,my=30/720)
     R_r = curvatureRadius(poly_r,mx=3.7/700,my=30/720)
     offset1 = offset(poly_l,poly_r,x_size,mx=3.7/700)
@@ -205,8 +208,6 @@ while(cap.isOpened()):
     plt.imshow(final_im)
     left_start = np.polyval(poly_l,np.max(y_new))       #defining the starts from the next frame
     right_start = np.polyval(poly_r,np.max(y_new))
-    xlprev.append(x_newl)
-    xrprev.append(x_newr)
 
 
     out.write(final_im)
